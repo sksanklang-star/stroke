@@ -11,23 +11,30 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS
+# --- 2. CSS WITH MOBILE SCROLL FIX ---
 st.markdown("""
 <style>
+    /* Standard Styles */
     .big-font { font-size:24px !important; font-weight: bold; }
     .metric-card { background-color: #f0f2f6; padding: 20px; border-radius: 10px; }
     h1, h2, h3 { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     
-    /* Force charts to fit mobile width */
+    /* Force charts to fit width */
     .js-plotly-plot { width: 100% !important; }
+
+    /* --- MOBILE SCROLL FIX --- */
+    /* This allows the user to scroll the page vertically even if touching the chart */
+    .js-plotly-plot .plotly {
+        touch-action: pan-y !important; 
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- HELPER: DISABLE ZOOM/PAN BUT KEEP DOWNLOAD ---
+# --- HELPER: DISABLE ZOOM BUT KEEP DOWNLOAD ---
 def make_static(fig):
     """
     Locks the chart layout to prevent mobile scroll hijacking,
-    but leaves the structure compatible with downloading.
+    but leaves the structure compatible with the download button.
     """
     fig.update_layout(
         dragmode=False,   # Disables the "Rectangle Zoom" tool on the chart surface
@@ -39,21 +46,21 @@ def make_static(fig):
     fig.update_yaxes(fixedrange=True)
     return fig
 
-# --- CONFIG: HIDE ZOOM BUTTONS, SHOW DOWNLOAD ---
+# --- CONFIG: TOOLBAR SETTINGS ---
 chart_config = {
-    'displayModeBar': True,         # SHOW the toolbar (so they can download)
-    'scrollZoom': False,            # Disable mouse scroll zoom
-    'showAxisDragHandles': False,   # Disable axis dragging
+    'displayModeBar': True,         # Show Toolbar (for Download)
+    'scrollZoom': False,            # Disable scroll zooming
+    'showAxisDragHandles': False,   # Disable axis drag
     'displaylogo': False,           # Hide Plotly logo
-    # Only remove the navigation/zoom tools. Keep 'toImage' (Download).
+    # Remove Zoom/Pan tools, Keep Download (toImage)
     'modeBarButtonsToRemove': [
         'zoom2d', 'pan2d', 'select2d', 'lasso2d', 
         'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d',
-        'hoverClosestCartesian', 'hoverCompareCartesian' 
+        'hoverClosestCartesian', 'hoverCompareCartesian'
     ]
 }
 
-# --- 2. LOAD & PROCESS DATA ---
+# --- 3. LOAD & PROCESS DATA ---
 @st.cache_data
 def load_data():
     try:
@@ -120,7 +127,7 @@ critical_count = len(critical_df)
 risky_homes = len(df[df['Env_Risk_Score'] >= 5])
 bedridden = len(df[df['Mobility_Label'] == 'ติดเตียง'])
 
-# --- 3. DASHBOARD LAYOUT ---
+# --- 4. DASHBOARD LAYOUT ---
 
 st.title("Dashboard สรุปสถานการณ์ผู้ป่วยและการประเมินความเสี่ยง")
 st.markdown("โครงการปรับสภาพแวดล้อมที่อยู่อาศัยสำหรับผู้ป่วย Stroke")
