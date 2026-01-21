@@ -21,7 +21,7 @@ st.markdown("""
     /* Header Title Style */
     h1, h2, h3 {
         font-size: 24px !important;
-        font-weight: bold !important;   
+        font-weight: bold !important;
         margin-bottom: 20px !important;
     }
 

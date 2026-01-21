@@ -6,82 +6,66 @@ import re
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="Stroke Care Intelligence",
-    layout="wide",
+    page_title="Stroke Care Dashboard",
+    layout="wide", 
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. MODERN UI SYSTEM (CSS) ---
+# --- 2. CSS WITH MOBILE SCROLL FIX ---
 st.markdown("""
 <style>
-    /* Import Google Font 'Sarabun' for professional Thai text */
-    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap');
+    /* Standard Styles */
+    .big-font { font-size:24px !important; font-weight: bold; }
+    .metric-card { background-color: #f0f2f6; padding: 20px; border-radius: 10px; }
+    h1, h2, h3 { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     
-    * { font-family: 'Sarabun', sans-serif; }
+    /* Force charts to fit width */
+    .js-plotly-plot { width: 100% !important; }
 
-    /* App Background */
-    .stApp {
-        background-color: #f1f5f9; /* Slate-100 */
+    /* --- MOBILE SCROLL FIX --- */
+    /* This allows the user to scroll the page vertically even if touching the chart */
+    .js-plotly-plot .plotly {
+        touch-action: pan-y !important; 
     }
-
-    /* Top Navigation Bar Styling */
-    .nav-container {
-        background-color: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        margin-bottom: 20px;
-    }
-
-    /* Card Styling */
-    .css-card {
-        background-color: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-        margin-bottom: 15px;
-        border: 1px solid #e2e8f0;
-    }
-    
-    /* Metrics Styling */
-    div[data-testid="stMetric"] {
-        background-color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    }
-    div[data-testid="stMetricLabel"] { font-size: 14px; color: #64748b; }
-    div[data-testid="stMetricValue"] { font-size: 28px; color: #0f172a; font-weight: 700; }
-
-    /* Tab Styling */
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] {
-        height: 45px;
-        background-color: white;
-        border-radius: 6px;
-        border: 1px solid #e2e8f0;
-        padding: 0 20px;
-        font-weight: 500;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #0f172a; /* Dark Slate */
-        color: white;
-    }
-    
-    /* Headers */
-    h1 { color: #0f172a; font-weight: 700; font-size: 28px; margin-bottom: 0; }
-    h3 { color: #334155; font-size: 18px; font-weight: 600; margin-bottom: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA PROCESSING ---
+# --- HELPER: DISABLE ZOOM BUT KEEP DOWNLOAD ---
+def make_static(fig):
+    """
+    Locks the chart layout to prevent mobile scroll hijacking,
+    but leaves the structure compatible with the download button.
+    """
+    fig.update_layout(
+        dragmode=False,   # Disables the "Rectangle Zoom" tool on the chart surface
+        clickmode='event', # Allows clicking (for tooltips) but no zoom
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+    # Lock axes so they don't zoom on touch/scroll
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
+    return fig
+
+# --- CONFIG: TOOLBAR SETTINGS ---
+chart_config = {
+    'displayModeBar': True,         # Show Toolbar (for Download)
+    'scrollZoom': False,            # Disable scroll zooming
+    'showAxisDragHandles': False,   # Disable axis drag
+    'displaylogo': False,           # Hide Plotly logo
+    # Remove Zoom/Pan tools, Keep Download (toImage)
+    'modeBarButtonsToRemove': [
+        'zoom2d', 'pan2d', 'select2d', 'lasso2d', 
+        'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d',
+        'hoverClosestCartesian', 'hoverCompareCartesian'
+    ]
+}
+
+# --- 3. LOAD & PROCESS DATA ---
 @st.cache_data
 def load_data():
     try:
         df = pd.read_csv('file.csv') 
     except:
-        st.error("System Error: 'file.csv' not found. Please ensure the file is in the same folder.")
         return None
 
     # Processing Logic
@@ -100,7 +84,7 @@ def load_data():
         return f"หมู่ {match.group(1)}" if match else "ไม่ระบุ"
     df['Village'] = df[df.columns[2]].apply(get_moo)
 
-    # 2. Extract Sex
+    # 2. EXTRACT SEX FROM NAME
     name_col = df.columns[1] 
     def extract_sex(name):
         n = str(name).strip()
@@ -109,10 +93,10 @@ def load_data():
         else: return "ไม่ระบุ"
     df['Sex'] = df[name_col].apply(extract_sex)
     
-    # 3. Risk Score
+    # 3. Calculate Risk Score
     df['Env_Risk_Score'] = df.apply(lambda row: sum(1 for c in env_cols if "ใช่" in str(row[c]) and "ไม่ใช่" not in str(row[c])), axis=1)
     
-    # 4. ADL Score
+    # 4. Calculate ADL Score
     adl_cols = df.columns[16:26]
     df['ADL_Score'] = df[adl_cols].applymap(lambda x: int(str(x).strip()[0]) if pd.notna(x) and str(x).strip()[0].isdigit() else 0).sum(axis=1)
     
@@ -130,42 +114,11 @@ def load_data():
 
     return df, env_cols, env_labels_map, name_col
 
-# Load Data
 data_load = load_data()
 if data_load is None:
+    st.error("ไม่พบไฟล์ 'file.csv' กรุณาตรวจสอบว่าไฟล์อยู่ในโฟลเดอร์เดียวกัน")
     st.stop()
-df_original, env_cols, env_labels_map, name_col_index = data_load
-
-# --- 4. TOP CONTROL BAR (Nav & Filters) ---
-with st.container():
-    # Header Section
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        st.title("Stroke Care Intelligence")
-        st.markdown("<div style='color: #64748b; margin-top: -10px;'>ระบบวิเคราะห์ข้อมูลผู้ป่วยและสภาพแวดล้อมเพื่อการตัดสินใจ</div>", unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Filter Section (Moved to Top)
-    with st.expander("ตัวกรองข้อมูล (Filters)", expanded=True):
-        f1, f2, f3 = st.columns([1, 1, 2])
-        with f1:
-            all_villages = sorted(df_original['Village'].unique())
-            selected_villages = st.multiselect("เลือกหมู่บ้าน:", all_villages, default=all_villages)
-        with f2:
-            all_sex = sorted(df_original['Sex'].unique())
-            selected_sex = st.multiselect("เลือกเพศ:", all_sex, default=all_sex)
-        with f3:
-            st.markdown("") # Spacer
-
-# Apply Filters
-df = df_original.copy()
-if selected_villages:
-    df = df[df['Village'].isin(selected_villages)]
-if selected_sex:
-    df = df[df['Sex'].isin(selected_sex)]
-
-# --- 5. MAIN DASHBOARD CONTENT ---
+df, env_cols, env_labels_map, name_col_index = data_load
 
 # KPI Calculations
 total_patients = len(df)
@@ -174,154 +127,183 @@ critical_count = len(critical_df)
 risky_homes = len(df[df['Env_Risk_Score'] >= 5])
 bedridden = len(df[df['Mobility_Label'] == 'ติดเตียง'])
 
-st.markdown("### ภาพรวมโครงการ (Project Overview)")
+# --- 4. DASHBOARD LAYOUT ---
 
-# KPI ROW
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("ผู้ป่วยทั้งหมด", f"{total_patients} คน")
-k2.metric("กลุ่มวิกฤต (Critical)", f"{critical_count} คน", "High Priority", delta_color="inverse")
-k3.metric("บ้านเสี่ยงสูง (>5 จุด)", f"{risky_homes} หลัง", "Need Improvement", delta_color="inverse")
-k4.metric("ผู้ป่วยติดเตียง", f"{bedridden} คน", "Special Care")
+st.title("Dashboard สรุปสถานการณ์ผู้ป่วยและการประเมินความเสี่ยง")
+st.markdown("โครงการปรับสภาพแวดล้อมที่อยู่อาศัยสำหรับผู้ป่วย Stroke")
+st.markdown("---")
 
-st.markdown("###") # Spacer
+# ROW 1: KPI CARDS
+col1, col2, col3, col4 = st.columns(4)
+with col1: st.metric(label="ผู้ป่วยทั้งหมด (Total)", value=f"{total_patients} คน")
+with col2: st.metric(label="กลุ่มวิกฤต (Critical)", value=f"{critical_count} คน", delta="ความเสี่ยงสูง", delta_color="inverse")
+with col3: st.metric(label="บ้านเสี่ยงสูง (>5 จุด)", value=f"{risky_homes} หลัง")
+with col4: st.metric(label="ผู้ป่วยติดเตียง", value=f"{bedridden} คน")
 
-# TABS
-tab1, tab2, tab3, tab4 = st.tabs(["ภาพรวมพื้นที่", "สุขภาพผู้ป่วย", "ความเสี่ยงบ้าน", "ฐานข้อมูล"])
+st.markdown("###")
 
-# --- TAB 1: OVERVIEW ---
-with tab1:
-    c1, c2 = st.columns([2, 1])
+# --- ROW 2: LOCATION & DEMOGRAPHICS ---
+r2_c1, r2_c2 = st.columns(2)
+
+with r2_c1:
+    st.subheader("จำนวนผู้ป่วยแยกตามหมู่บ้าน")
+    village_counts = df['Village'].value_counts().reset_index()
+    village_counts.columns = ['Village', 'Count']
+    fig_village = px.bar(village_counts, x='Village', y='Count', text='Count', 
+                         color_discrete_sequence=['#475569'])
     
-    with c1:
-        st.markdown('<div class="css-card"><h3>จำนวนผู้ป่วยแยกตามหมู่บ้าน</h3>', unsafe_allow_html=True)
-        village_counts = df['Village'].value_counts().reset_index()
-        village_counts.columns = ['Village', 'Count']
-        fig_v = px.bar(village_counts, x='Village', y='Count', text='Count', color_discrete_sequence=['#334155'])
-        fig_v.update_traces(textposition='outside')
-        fig_v.update_layout(xaxis_title=None, yaxis_title=None, plot_bgcolor='white', margin=dict(t=10, b=10))
-        st.plotly_chart(fig_v, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+    make_static(fig_village)
+    fig_village.update_layout(xaxis_title=None, yaxis_title=None)
+    st.plotly_chart(fig_village, use_container_width=True, config=chart_config)
 
-    with c2:
-        st.markdown('<div class="css-card"><h3>สัดส่วนเพศ</h3>', unsafe_allow_html=True)
-        sex_counts = df['Sex'].value_counts().reset_index()
-        sex_counts.columns = ['Sex', 'Count']
-        fig_s = px.pie(sex_counts, values='Count', names='Sex', hole=0.6,
-                       color='Sex', color_discrete_map={'ชาย': '#6366f1', 'หญิง': '#ec4899', 'ไม่ระบุ': '#cbd5e1'})
-        fig_s.update_traces(textposition='outside', texttemplate='%{percent:.0%} (%{value})<br>%{label}')
-        
-        # FIX: Increased margins to prevent overflow
-        fig_s.update_layout(showlegend=False, margin=dict(t=30, b=30, l=60, r=60))
-        
-        st.plotly_chart(fig_s, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+with r2_c2:
+    st.subheader("สัดส่วนเพศ (ชาย/หญิง)")
+    sex_counts = df['Sex'].value_counts().reset_index()
+    sex_counts.columns = ['Sex', 'Count']
+    color_map_sex = {'ชาย': '#3b82f6', 'หญิง': '#ec4899', 'ไม่ระบุ': '#94a3b8'}
+    
+    fig_sex = px.pie(sex_counts, values='Count', names='Sex', hole=0.4,
+                     color='Sex', color_discrete_map=color_map_sex)
+    fig_sex.update_traces(textposition='outside', texttemplate='%{percent:.0%} ( %{value} คน )<br>%{label}')
+    
+    make_static(fig_sex)
+    # Increased margins for mobile labels
+    fig_sex.update_layout(showlegend=False, margin=dict(t=30, b=20, l=50, r=50))
+    st.plotly_chart(fig_sex, use_container_width=True, config=chart_config)
 
-    # Action Plan (Styled Box)
-    st.markdown("### แผนดำเนินการเร่งด่วน (Action Plan)")
+st.markdown("---")
+
+# --- ROW 3: HEALTH STATUS ---
+r3_c1, r3_c2 = st.columns(2)
+
+with r3_c1:
+    st.subheader("สถานะการเคลื่อนไหว")
+    mobility_counts = df['Mobility_Label'].value_counts().reset_index()
+    mobility_counts.columns = ['Status', 'Count']
     
-    if not village_counts.empty: top_moo = village_counts.iloc[0]['Village']
-    else: top_moo = "-"
+    fig_mob = px.bar(mobility_counts, x='Status', y='Count', text='Count',
+                     color='Status', color_discrete_sequence=px.colors.sequential.Tealgrn_r)
     
-    risk_data_all = {}
+    make_static(fig_mob)
+    fig_mob.update_layout(xaxis_title=None, yaxis_title=None, showlegend=False)
+    st.plotly_chart(fig_mob, use_container_width=True, config=chart_config)
+
+with r3_c2:
+    st.subheader("ระดับความพึ่งพิง (ADL Group)")
+    order = ["กลุ่มที่ 3: ช่วยเหลือตัวเองไม่ได้ (0-4)", "กลุ่มที่ 2: ดูแลตนเองได้บ้าง (5-11)", "กลุ่มที่ 1: ช่วยเหลือตัวเองได้ (12-20)"]
+    adl_counts = df['ADL_Group'].value_counts().reindex(order, fill_value=0).reset_index()
+    adl_counts.columns = ['Group', 'Count']
+    
+    color_map_adl = {
+        "กลุ่มที่ 3: ช่วยเหลือตัวเองไม่ได้ (0-4)": "#ef4444", 
+        "กลุ่มที่ 2: ดูแลตนเองได้บ้าง (5-11)": "#f59e0b",
+        "กลุ่มที่ 1: ช่วยเหลือตัวเองได้ (12-20)": "#10b981"
+    }
+    
+    fig_adl = px.pie(adl_counts, values='Count', names='Group', hole=0.4,
+                     color='Group', color_discrete_map=color_map_adl)
+    
+    fig_adl.update_traces(textposition='outside', texttemplate='%{label}<br>%{percent:.0%} ( %{value} คน )')
+    
+    make_static(fig_adl)
+    # Increased margins for mobile labels
+    fig_adl.update_layout(showlegend=False, margin=dict(t=30, b=20, l=50, r=50))
+    st.plotly_chart(fig_adl, use_container_width=True, config=chart_config)
+
+st.markdown("---")
+
+# --- ROW 4: RISKS & ANALYSIS ---
+r4_c1, r4_c2 = st.columns(2)
+
+with r4_c1:
+    st.subheader("ความเสี่ยงสภาพแวดล้อมที่พบมากที่สุด")
+    risk_data = {}
     for col in env_cols:
+        label = env_labels_map.get(col, col)
         count = df[col].astype(str).apply(lambda x: "ใช่" in x and "ไม่ใช่" not in x).sum()
-        risk_data_all[env_labels_map[col]] = count
-    if risk_data_all:
-        top_risk_name = max(risk_data_all, key=risk_data_all.get)
-    else:
-        top_risk_name = "-"
-
-    ap1, ap2, ap3 = st.columns(3)
-    ap1.info(f"**พื้นที่เป้าหมายหลัก:**\n\n### {top_moo}\n\nพบผู้ป่วยหนาแน่นที่สุด ควรลงพื้นที่ก่อน")
-    ap2.error(f"**กลุ่มวิกฤต:**\n\n### {critical_count} ราย\n\nต้องติดตั้งราวจับ/ปรับพื้นทันที")
-    ap3.warning(f"**จุดเสี่ยงสำคัญ:**\n\n### {top_risk_name}\n\nจัดซื้องบประมาณแก้ไขจุดนี้")
-
-# --- TAB 2: HEALTH ---
-with tab2:
-    h1, h2 = st.columns(2)
+        risk_data[label] = count
     
-    with h1:
-        st.markdown('<div class="css-card"><h3>สถานะการเคลื่อนไหว</h3>', unsafe_allow_html=True)
-        mob_counts = df['Mobility_Label'].value_counts().reset_index()
-        mob_counts.columns = ['Status', 'Count']
-        fig_mob = px.bar(mob_counts, x='Status', y='Count', text='Count', 
-                         color='Status', color_discrete_sequence=px.colors.qualitative.Prism)
-        fig_mob.update_layout(xaxis_title=None, yaxis_title=None, showlegend=False, plot_bgcolor='white')
-        st.plotly_chart(fig_mob, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-    with h2:
-        st.markdown('<div class="css-card"><h3>ระดับความพึ่งพิง (ADL Group)</h3>', unsafe_allow_html=True)
-        order_adl = ["กลุ่มที่ 3: ช่วยเหลือตัวเองไม่ได้ (0-4)", "กลุ่มที่ 2: ดูแลตนเองได้บ้าง (5-11)", "กลุ่มที่ 1: ช่วยเหลือตัวเองได้ (12-20)"]
-        adl_counts = df['ADL_Group'].value_counts().reindex(order_adl, fill_value=0).reset_index()
-        adl_counts.columns = ['Group', 'Count']
-        
-        # Colors: Red -> Amber -> Emerald
-        color_map_adl = {
-            "กลุ่มที่ 3: ช่วยเหลือตัวเองไม่ได้ (0-4)": "#ef4444", 
-            "กลุ่มที่ 2: ดูแลตนเองได้บ้าง (5-11)": "#f59e0b",
-            "กลุ่มที่ 1: ช่วยเหลือตัวเองได้ (12-20)": "#10b981"
-        }
-        fig_adl = px.pie(adl_counts, values='Count', names='Group', hole=0.5, color='Group', color_discrete_map=color_map_adl)
-        fig_adl.update_traces(textposition='outside', texttemplate='%{label}<br>%{percent:.0%} (%{value})')
-        
-        # FIX: Increased margins heavily for ADL Chart because labels are long
-        fig_adl.update_layout(showlegend=False, margin=dict(t=50, b=50, l=80, r=80))
-        
-        st.plotly_chart(fig_adl, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# --- TAB 3: RISKS ---
-with tab3:
-    r1, r2 = st.columns(2)
+    risk_df = pd.DataFrame(list(risk_data.items()), columns=['Risk', 'Count']).sort_values('Count', ascending=True)
     
-    with r1:
-        st.markdown('<div class="css-card"><h3>ความเสี่ยงที่พบมากที่สุด</h3>', unsafe_allow_html=True)
-        # Recalculate
-        risk_data = {}
-        for col in env_cols:
-            lbl = env_labels_map.get(col, col)
-            cnt = df[col].astype(str).apply(lambda x: "ใช่" in x and "ไม่ใช่" not in x).sum()
-            risk_data[lbl] = cnt
-        risk_df = pd.DataFrame(list(risk_data.items()), columns=['Risk', 'Count']).sort_values('Count', ascending=True)
-        
-        # Colorscale 'Blues' (Safe built-in scale)
-        fig_r = px.bar(risk_df, x='Count', y='Risk', text='Count', orientation='h', color='Count', color_continuous_scale='Blues')
-        fig_r.update_layout(xaxis_title="จำนวนหลัง", yaxis_title=None, showlegend=False, plot_bgcolor='white', height=400)
-        st.plotly_chart(fig_r, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-    with r2:
-        st.markdown('<div class="css-card"><h3>Matrix: สุขภาพ vs ความเสี่ยงบ้าน</h3>', unsafe_allow_html=True)
-        fig_sc = px.scatter(df, x='ADL_Score', y='Env_Risk_Score', color='Env_Risk_Score', 
-                            size_max=15, hover_data=[name_col_index, 'Village'], color_continuous_scale='Reds')
-        
-        # Critical Zone
-        fig_sc.add_shape(type="rect", x0=0, y0=5, x1=10, y1=10, line=dict(color="Red", width=2, dash="dash"))
-        fig_sc.add_annotation(x=5, y=9.5, text="CRITICAL ZONE", showarrow=False, font=dict(color="red", size=14))
-        
-        fig_sc.update_xaxes(range=[-1, 21], title="ADL Score (สุขภาพ)")
-        fig_sc.update_yaxes(range=[-1, 11], title="Risk Score (บ้าน)")
-        fig_sc.update_layout(plot_bgcolor='#f8fafc', height=400)
-        st.plotly_chart(fig_sc, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# --- TAB 4: DATABASE ---
-with tab4:
-    st.markdown("### ฐานข้อมูลผู้ป่วย (Database)")
+    fig_risk = px.bar(risk_df, x='Count', y='Risk', text='Count', orientation='h',
+                      color='Count', color_continuous_scale='Blues')
     
-    table_df = df[[name_col_index, 'Village', 'Sex', 'ADL_Score', 'ADL_Group', 'Env_Risk_Score', 'Mobility_Label']].copy()
-    table_df.columns = ['ชื่อ-สกุล', 'หมู่บ้าน', 'เพศ', 'คะแนน ADL', 'กลุ่ม ADL', 'คะแนนความเสี่ยง', 'การเคลื่อนไหว']
-    
-    # Highlight Logic
-    def highlight_critical(row):
-        # Light Red background for Critical
-        if row['คะแนน ADL'] < 10 and row['คะแนนความเสี่ยง'] >= 3:
-            return ['background-color: #fee2e2; color: #991b1b'] * len(row)
-        return [''] * len(row)
+    make_static(fig_risk)
+    fig_risk.update_layout(xaxis_title="จำนวนเคส", yaxis_title=None, showlegend=False)
+    st.plotly_chart(fig_risk, use_container_width=True, config=chart_config)
 
-    st.dataframe(
-        table_df.style.apply(highlight_critical, axis=1), 
-        use_container_width=True,
-        height=600
+with r4_c2:
+    st.subheader("Matrix: สุขภาพ vs ความเสี่ยงบ้าน")
+    fig_scatter = px.scatter(df, x='ADL_Score', y='Env_Risk_Score', 
+                             color='Env_Risk_Score', size_max=15,
+                             hover_data=[df.columns[1], 'Village'],
+                             color_continuous_scale='Reds',
+                             labels={'ADL_Score': 'คะแนนสุขภาพ (ADL)', 'Env_Risk_Score': 'คะแนนความเสี่ยงบ้าน'})
+    
+    # Critical Zone Box
+    fig_scatter.add_shape(type="rect", x0=0, y0=5, x1=10, y1=10, line=dict(color="Red", width=2, dash="dash"))
+    fig_scatter.add_annotation(x=5, y=9.5, text="CRITICAL ZONE", showarrow=False, font=dict(color="red", size=14))
+    
+    make_static(fig_scatter)
+    fig_scatter.update_xaxes(range=[-1, 21])
+    fig_scatter.update_yaxes(range=[-1, 11])
+    st.plotly_chart(fig_scatter, use_container_width=True, config=chart_config)
+
+# --- SECTION: PROJECT PROGRESS (CENTERED) ---
+st.markdown("---")
+st.header("📅 ความคืบหน้าโครงการ (Project Progress)")
+
+progress_data = {
+    "Task": [
+        "1.การแต่งตั้งคณะทำงาน", "2.กระบวนการคัดเลือกตัวอย่าง",
+        "3.ประชุมคณะทำงาน & ที่ปรึกษา", "4.ประชุมอบรม Caregiver & อสม.",
+        "5.ลงสำรวจเก็บข้อมูล Pre-test", "6.ตรวจสอบความถูกต้องข้อมูล",
+        "7.พัฒนาท่ากายภาพบำบัดต้นแบบ", "8.พัฒนา Software ต้นแบบ"
+    ],
+    "Progress": [100, 100, 100, 100, 100, 100, 100, 100]
+}
+df_progress = pd.DataFrame(progress_data)
+df_progress = df_progress.iloc[::-1]
+
+c_left, c_center, c_right = st.columns([1, 5, 1])
+
+with c_center:
+    fig_prog = px.bar(df_progress, x='Progress', y='Task', text='Progress', orientation='h',
+                      color_discrete_sequence=['#10b981'])
+
+    fig_prog.update_traces(texttemplate='%{text}%', textposition='inside')
+    
+    make_static(fig_prog)
+    fig_prog.update_layout(
+        xaxis_title="ความสำเร็จ (%)", yaxis_title=None,
+        xaxis=dict(range=[0, 105], showgrid=True),
+        height=400, margin=dict(l=0, r=0, t=0, b=0)
     )
+    st.plotly_chart(fig_prog, use_container_width=True, config=chart_config)
+
+# --- ACTION PLAN ---
+st.markdown("---")
+st.header("การวิเคราะห์เชิงลึกและแผนดำเนินการ (Action Plan)")
+
+if not village_counts.empty:
+    top_village = village_counts.iloc[0]
+else:
+    top_village = {'Village': '-', 'Count': 0}
+if not risk_df.empty:
+    top_risk = risk_df.iloc[-1]
+else:
+    top_risk = {'Risk': '-', 'Count': 0}
+
+st.info(f"**1. พื้นที่เป้าหมายเร่งด่วน:** **{top_village['Village']}** (พบผู้ป่วย {top_village['Count']} ราย) - ควรจัดทีม Mobile Unit ลงพื้นที่นี้เป็นลำดับแรก")
+st.error(f"**2. กลุ่มเป้าหมายวิกฤต (Critical Target):** พบผู้ป่วย **{critical_count} ราย** ที่มีปัญหาสุขภาพรุนแรงและอาศัยในบ้านเสี่ยงสูง - การดำเนินการ: ติดตั้งราวจับและปรับพื้นห้องน้ำทันที")
+st.warning(f"**3. ความเสี่ยงภาพรวม:** ปัญหาที่พบมากที่สุดคือ **\"{top_risk['Risk']}\"** ({top_risk['Count']} ครัวเรือน) - ควรจัดหางบประมาณเพื่อจัดซื้ออุปกรณ์แก้ไขปัญหานี้โดยเฉพาะ")
+
+# --- TABLE ---
+st.markdown("---")
+st.header("📋 รายชื่อผู้ป่วยและคะแนนประเมิน (Patient List)")
+
+table_df = df[[name_col_index, 'Village', 'ADL_Score', 'Env_Risk_Score', 'ADL_Group']].copy()
+table_df.columns = ['ชื่อ-สกุล', 'หมู่บ้าน', 'คะแนน ADL (เต็ม 20)', 'คะแนนความเสี่ยงบ้าน (เต็ม 10)', 'กลุ่มอาการ']
+table_df = table_df.sort_values(by='คะแนน ADL (เต็ม 20)', ascending=True)
+
+st.dataframe(table_df, use_container_width=True)
