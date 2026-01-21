@@ -117,7 +117,7 @@ df_exp['Run_Balance'] = total_budget - df_exp['Cumulative']
 
 # --- 4. DASHBOARD LAYOUT ---
 
-st.title("📊 รายงานสรุปการเงินโครงการ Stroke Care")
+st.title("รายงานสรุปการเงินโครงการ Stroke Care")
 st.markdown(f"**สถานะ:** ใช้งบประมาณ {burn_rate:.1f}% | **ยอดรวม:** ฿{total_budget:,.0f}")
 st.markdown("---")
 
@@ -138,7 +138,7 @@ r1c1, r1c2 = st.columns([2, 1])
 
 with r1c1:
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-    st.subheader("📉 กราฟแสดงงบประมาณคงเหลือ (Burndown)")
+    st.subheader("กราฟแสดงงบประมาณคงเหลือ (Burndown)")
     fig_burn = go.Figure()
     fig_burn.add_trace(go.Scatter(y=df_exp['Run_Balance'], mode='lines', fill='tozeroy', name='คงเหลือ', line=dict(color='#2563eb')))
     fig_burn.update_layout(height=300, margin=dict(t=20, b=20), xaxis_title="ลำดับการเบิกจ่าย", yaxis_title="บาท")
@@ -147,7 +147,7 @@ with r1c1:
 
 with r1c2:
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-    st.subheader("🍩 สัดส่วนค่าใช้จ่าย")
+    st.subheader("สัดส่วนค่าใช้จ่าย")
     cat_sum = df_exp.groupby('Category')['Expense'].sum().reset_index()
     fig_pie = px.pie(cat_sum, values='Expense', names='Category', hole=0.5, color_discrete_sequence=px.colors.qualitative.Set2)
     fig_pie.update_layout(height=300, margin=dict(t=20, b=20), showlegend=False)
@@ -160,7 +160,7 @@ r2c1, r2c2 = st.columns(2)
 
 with r2c1:
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-    st.subheader("📅 ยอดใช้จ่ายรายวัน (Daily Spending)")
+    st.subheader("ยอดใช้จ่ายรายวัน (Daily Spending)")
     # Group by the extracted 'Date_Group'
     daily_sum = df_exp.groupby('Date_Group')['Expense'].sum().reset_index()
     # Attempt to sort by extracting date text if needed, here usually sorting by appearance is safer for mixed formats
@@ -172,7 +172,7 @@ with r2c1:
 
 with r2c2:
     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-    st.subheader("📈 ยอดใช้จ่ายสะสม (Cumulative Spending)")
+    st.subheader("ยอดใช้จ่ายสะสม (Cumulative Spending)")
     fig_cum = go.Figure()
     fig_cum.add_trace(go.Scatter(y=df_exp['Cumulative'], mode='lines+markers', name='สะสม', line=dict(color='#ef4444', width=3)))
     fig_cum.update_layout(height=350, xaxis_title="ลำดับรายการ", yaxis_title="บาทสะสม")
@@ -181,7 +181,7 @@ with r2c2:
 
 # --- ROW 3: TOP EXPENSES (Horizontal Bar) ---
 st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-st.subheader("🏆 10 อันดับ รายจ่ายสูงสุด (Top Spenders)")
+st.subheader("10 อันดับ รายจ่ายสูงสุด (Top Spenders)")
 top_10 = df_exp.sort_values(by='Expense', ascending=False).head(10)
 fig_top = px.bar(top_10, x='Expense', y='Item', orientation='h', text='Expense', color='Expense', color_continuous_scale='Viridis')
 fig_top.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="จำนวนเงิน (บาท)", height=400)
@@ -190,7 +190,7 @@ st.plotly_chart(fig_top, use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- LEDGER ---
-st.subheader("📋 รายละเอียดรายการทั้งหมด")
+st.subheader("รายละเอียดรายการทั้งหมด")
 display_df = df_exp[['Item', 'Date_Group', 'Category', 'Expense']].copy()
 display_df.columns = ['รายการ', 'วันที่ (อ้างอิง)', 'หมวดหมู่', 'จำนวนเงิน']
 display_df['จำนวนเงิน'] = display_df['จำนวนเงิน'].apply(lambda x: f"{x:,.0f}")
